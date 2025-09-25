@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import vtk
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+#from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import tqdm
 import SimpleITK as sitk
 import json
@@ -151,7 +151,7 @@ def generate_polar_values(path,
 
     # resample segmentation with transform
     scalar_im = sitk.GetArrayFromImage(scalar_image).transpose(2, 1, 0)
-    scalar_im[~ignore_ring] = 0 
+    #scalar_im[~ignore_ring] = 0 
     scalar_image = sitk.GetImageFromArray(scalar_im.transpose(2, 1, 0))
     scalar_image.CopyInformation(label_total)
     scalar_seg = sitk.Resample(scalar_image,
@@ -229,6 +229,8 @@ def create_single_bs_from_mesh(split, folder, mesh_path, plot_folder, idx, scala
     # x, y = utils.polar2cartesian(rad, theta)
     
     cmap = "plasma" if mesh_path.find("squeez")!=-1 else plt.cm.tab20 if mesh_path.find("17")!=-1 else "seismic"
+    # original cmap virker ikke for windows 
+    #cmap = "plasma" if "squeez" in str(mesh_path) else plt.cm.tab20 if "17" in str(mesh_path) else "seismic"
     darkened_cmap = utils.darken_cmap(cmap, factor=0.85)
     global_min = np.quantile(polar_vals, 0.001) if global_min is None else global_min
     global_max = np.quantile(polar_vals, 0.999) if global_max is None else global_max
@@ -274,8 +276,10 @@ if __name__ == "__main__":
 
     id = '0010'
     series_id = '0020'
+    
+    working_dir = Path.cwd()
 
-    folder = f'F:/sp/assets/data/{id}'
-    plot_folder = f'F:/sp/assets/data/{id}/bullseye'
+    folder = working_dir / f'assets/data/{id}'
+    plot_folder = working_dir / f'assets/data/{id}/bullseye'
 
-    create_single_bs_from_mesh(split=0, folder=folder, mesh_path=f'F:/sp/assets/data/{id}/processed/surfaces/myocardium_17.vtk', plot_folder=plot_folder, idx=None)
+    create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/myocardium_17.vtk'), plot_folder=str(plot_folder), idx=None)

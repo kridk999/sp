@@ -13,6 +13,7 @@ from platipy.imaging.label.utils import get_com
 from platipy.imaging.utils.crop import crop_to_roi, label_to_roi
 from platipy.imaging.utils.geometry import vector_angle
 from platipy.imaging.utils.valve import generate_valve_using_cylinder
+from pathlib import Path
 
 import utils
 
@@ -988,9 +989,15 @@ def wrap_lv_all(split, current_save_dir, exists_ok=True):
 if __name__ == "__main__":
 
     id = "0010"
-    series_id = "0020"
+    series_id = "0036"
+    working_dir = Path.cwd()
 
-    output_path = f'F:/sp/assets/data/{id}/processed'
-    segmentation_path = f'F:/sp/assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
-    image_path = f'F:/sp/assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
+    # Construct the paths dynamically using pathlib
+    output_path = working_dir / f'assets/data/{id}/processed'
+    segmentation_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
+    image_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
+
+    # output_path = f'F:/sp/assets/data/{id}/processed'
+    # segmentation_path = f'F:/sp/assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
+    # image_path = f'F:/sp/assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
     wrap_lv_segments(segmentation_path=segmentation_path, image_path=image_path, path=output_path)
