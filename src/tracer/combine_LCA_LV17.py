@@ -5,8 +5,8 @@ import SimpleITK as sitk
 import json
 import vtk
 from scipy.spatial import KDTree
-from skimage.morphology import binary_dilation
-from scipy.ndimage import center_of_mass
+#from skimage.morphology import binary_dilation
+from scipy.ndimage import center_of_mass, binary_dilation
 from platipy.imaging.label.utils import get_com
 from platipy.imaging.utils.crop import crop_to_roi, label_to_roi
 from platipy.imaging.utils.geometry import vector_angle
@@ -46,7 +46,11 @@ def generate_lvm_17_mesh(path,segmentation_path):
 
 
 def show_lv17_segment_on_LCA(lv17_mesh, lv17_scalars, ca_traced_path):
-    ca_traced = utils.read_vtk_mesh(ca_traced_path)
+    try:
+        ca_traced = utils.read_vtk_mesh(ca_traced_path)
+    except AssertionError:
+        print(f"Could not read CA traced mesh at {ca_traced_path}")
+        return None, None
     ca_scalars = ca_traced.GetPointData().GetScalars()
 
     locator = vtk.vtkPointLocator()
@@ -70,32 +74,58 @@ def add_LCA_onto_lv17_mesh(lv17_mesh, closest_idx_lv17):
         lv17_scalars.SetValue(idx,18)
     lv17_mesh.GetPointData().SetScalars(lv17_scalars) 
     return lv17_mesh
+
+# a function that, given the id and folder extract all series ids in that folder, which contains that id
+def extract_series_ids(folder, id):
+    series_ids = []
+    pattern = re.compile(rf'CFA-PILOT_{id}_SERIES(\d+)_labels.nii.gz')
+    for entry in os.listdir(folder):
+        match = pattern.match(entry)
+        if match:
+            series_ids.append(match.group(1))
+    return set(series_ids)
     
-   
-   
+
 
 if __name__ == "__main__":
-
+    BULLSEYE = False
+    LV17_WITH_LCA = False
+    LCA_WITH_LV17 = True
+    Verbose = True
+    
     id = "0010"
-    series_id = "0036"
+    #series_id = "0036"
     working_dir = Path.cwd()
-
-    # Construct the paths dynamically using pathlib
-    lv17_surface_path = working_dir / f'assets/data/{id}/processed/surfaces/myocardium_17.vtk'
-    segmentation_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
-    ca_traced_path = working_dir / f"assets\data\CoronaryTracing\CFA-PILOT_{id}_SERIES{series_id}\path_tracing\combined_paths\CFA-PILOT_{id}_SERIES{series_id}_combined_tree_spline.vtk"
-    #image_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
+    series_ids = extract_series_ids(working_dir / 'assets/data/0010/raw/', id)
     
-    # # Project the LV17 segmentation onto the LCA traced segments
-    # lv_mesh, s = generate_lvm_17_mesh(path=working_dir / f'assets/data/{id}/processed', segmentation_path=segmentation_path)
-    # ca_traced, idx_lv17 = show_lv17_segment_on_LCA(lv_mesh, s, ca_traced_path)
-    # utils.write_vtk_mesh(ca_traced, working_dir / f"assets/data/{id}/processed/surfaces/lv17_on_LCA_{id}.vtk")
+    for series_id in series_ids:
+        if Verbose:
+            print(f"Processing ID: {id}, Series ID: {series_id}")
+            
+        # Construct the paths dynamically using pathlib
+        lv17_surface_path = working_dir / f'assets/data/{id}/processed/surfaces/myocardium_17.vtk'
+        segmentation_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
+        ca_traced_path = working_dir / f"assets\data\CoronaryTracing\CFA-PILOT_{id}_SERIES{series_id}\path_tracing\combined_paths\CFA-PILOT_{id}_SERIES{series_id}_combined_tree_spline.vtk"
+        #image_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
+        
+        # # Project the LV17 segmentation onto the LCA traced segments
+        if LCA_WITH_LV17:
+            lv_mesh, s = generate_lvm_17_mesh(path=working_dir / f'assets/data/{id}/processed', segmentation_path=segmentation_path)
+            ca_traced, idx_lv17 = show_lv17_segment_on_LCA(lv_mesh, s, ca_traced_path)
+            if ca_traced is not None:
+                utils.write_vtk_mesh(ca_traced, working_dir / f"assets/data/{id}/processed/surfaces/lv17_on_LCA_{id}_SERIES_{series_id}.vtk")
+            else:
+                if Verbose:
+                    print(f"Skipping writing LCA with LV17 for ID: {id}, Series ID: {series_id} due to read error.")
+                continue
 
-    # # Projects the LCA traced segments onto the LV17 mesh
-    # lv17_with_LCA = add_LCA_onto_lv17_mesh(lv_mesh, idx_lv17)
-    # utils.write_vtk_mesh(lv17_with_LCA, working_dir / f"assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk")
-    
-    # Create bullseye plot of the combined mesh
-    folder = working_dir / f'assets/data/{id}'
-    plot_folder = working_dir / f'assets/data/{id}/bullseye'
-    create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk'), plot_folder=str(plot_folder), idx=None, id=id,series_id=series_id)
+        # # Projects the LCA traced segments onto the LV17 mesh
+        if LV17_WITH_LCA:
+            lv17_with_LCA = add_LCA_onto_lv17_mesh(lv_mesh, idx_lv17)
+            utils.write_vtk_mesh(lv17_with_LCA, working_dir / f"assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk")
+        
+        # Create bullseye plot of the combined mesh
+        if BULLSEYE:
+            folder = working_dir / f'assets/data/{id}'
+            plot_folder = working_dir / f'assets/data/{id}/bullseye'
+            create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk'), plot_folder=str(plot_folder), idx=None, id=id,series_id=series_id)

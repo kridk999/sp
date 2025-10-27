@@ -214,13 +214,17 @@ def fill_holes_in_bullseye(x, y, polar_vals, n_points_per_ring=500, n_neighbors=
     points_regular = np.array([X, Y]).T
     dist, ind = tree.query(points_regular, k=n_neighbors)
     polar_output = np.median(polar_vals[ind], axis=1)
-
+    # polar_output = np.where(
+    #     np.any(polar_vals[ind] == 18, axis=1),
+    #     18,
+    #     np.median(polar_vals[ind], axis=1)
+    # )
     #  = utils.polar2cartesian(Rad.flatten(), Th.flatten())
     mask = ~ (dist.mean(axis=1) > 2)
     X, Y, polar_output = X[mask], Y[mask], polar_output[mask]
     return X, Y, polar_output
 
-def create_single_bs_from_mesh(split, folder, mesh_path, plot_folder, idx, scalar_ring_ids=None, global_min=None, global_max=None, id='0010', series_id='0020'):
+def create_single_bs_from_mesh(split, folder, mesh_path, plot_folder, idx, scalar_ring_ids=None, global_min=None, global_max=None, id='0010', series_id='0036'):
     x, y, polar_vals = generate_polar_values(Path(folder), mesh_path, scalar_ring_ids=scalar_ring_ids, id=id, series_id=series_id)
     x, y, polar_vals = fill_holes_in_bullseye(x, y, polar_vals, 500, 5)
     # x = -x
@@ -248,7 +252,7 @@ def create_single_bs_from_mesh(split, folder, mesh_path, plot_folder, idx, scala
     # ax.set_title("ES - Squeez")
     fig.tight_layout()
     os.makedirs(plot_folder, exist_ok=True)
-    filename = os.path.join(plot_folder, f"{os.path.basename(mesh_path.split('.')[0])}.png")
+    filename = os.path.join(plot_folder, f"bullseye_{id}_{series_id}.png")
     
     plt.savefig(filename)
     plt.close()
@@ -275,11 +279,11 @@ def generate_bs_gif(split, folder, save_folder, mesh_name, gif_name=None, global
 if __name__ == "__main__":
 
     id = '0010'
-    series_id = '0020'
+    series_id = '0036'
     
     working_dir = Path.cwd()
 
     folder = working_dir / f'assets/data/{id}'
     plot_folder = working_dir / f'assets/data/{id}/bullseye'
 
-    create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/myocardium_17.vtk'), plot_folder=str(plot_folder), idx=None)
+    create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk'), plot_folder=str(plot_folder), idx=None)
