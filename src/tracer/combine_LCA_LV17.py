@@ -88,8 +88,8 @@ def extract_series_ids(folder, id):
 
 
 if __name__ == "__main__":
-    BULLSEYE = False
-    LV17_WITH_LCA = False
+    BULLSEYE = True
+    LV17_WITH_LCA = True
     LCA_WITH_LV17 = True
     Verbose = True
     
@@ -122,10 +122,10 @@ if __name__ == "__main__":
         # # Projects the LCA traced segments onto the LV17 mesh
         if LV17_WITH_LCA:
             lv17_with_LCA = add_LCA_onto_lv17_mesh(lv_mesh, idx_lv17)
-            utils.write_vtk_mesh(lv17_with_LCA, working_dir / f"assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk")
+            utils.write_vtk_mesh(lv17_with_LCA, working_dir / f"assets/data/{id}/processed/surfaces/LV17_CA_combined_{series_id}.vtk")
         
         # Create bullseye plot of the combined mesh
         if BULLSEYE:
             folder = working_dir / f'assets/data/{id}'
             plot_folder = working_dir / f'assets/data/{id}/bullseye'
-            create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/LV17_CA_combined_{id}.vtk'), plot_folder=str(plot_folder), idx=None, id=id,series_id=series_id)
+            create_single_bs_from_mesh(split=0, folder=str(folder), mesh_path=str(working_dir / f'assets/data/{id}/processed/surfaces/LV17_CA_combined_{series_id}.vtk'), plot_folder=str(plot_folder), idx=None, id=id,series_id=series_id)
