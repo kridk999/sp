@@ -1,3 +1,4 @@
+from importlib.resources import files
 import numpy as np
 import os
 from collections import defaultdict
@@ -851,3 +852,26 @@ def save_vtk_lines(data, save_name, ref=None):
     writer.SetDataModeToAscii()  # Ensure compatibility with Slicer
     writer.Write()
 
+if __name__ == "__main__":
+    
+    filenames=[
+    "assets/data/0010/bullseye/bullseye_0010_0007.png",
+    "assets/data/0010/bullseye/bullseye_0010_0008.png",
+    "assets/data/0010/bullseye/bullseye_0010_0020.png",
+    "assets/data/0010/bullseye/bullseye_0010_0021.png",
+    "assets/data/0010/bullseye/bullseye_0010_0022.png",
+    "assets/data/0010/bullseye/bullseye_0010_0028.png",
+    "assets/data/0010/bullseye/bullseye_0010_0029.png",
+    "assets/data/0010/bullseye/bullseye_0010_0030.png",
+    "assets/data/0010/bullseye/bullseye_0010_0031.png",
+    "assets/data/0010/bullseye/bullseye_0010_0032.png",
+    "assets/data/0010/bullseye/bullseye_0010_0033.png",
+    "assets/data/0010/bullseye/bullseye_0010_0034.png",
+    "assets/data/0010/bullseye/bullseye_0010_0035.png",
+    "assets/data/0010/bullseye/bullseye_0010_0036.png",
+    "assets/data/0010/bullseye/bullseye_0010_0037.png",
+    "assets/data/0010/bullseye/bullseye_0010_0038.png",
+    "assets/data/0010/bullseye/bullseye_0010_0039.png",
+    "assets/data/0010/bullseye/bullseye_0010_0040.png"
+]
+    create_gif(filenames, "./", "test_gif.gif", delete_files=False)

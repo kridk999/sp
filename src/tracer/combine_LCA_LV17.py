@@ -104,7 +104,7 @@ if __name__ == "__main__":
             
         # Construct the paths dynamically using pathlib
         lv17_surface_path = working_dir / f'assets/data/{id}/processed/surfaces/myocardium_17.vtk'
-        segmentation_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
+        segmentation_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES0036_labels.nii.gz'
         ca_traced_path = working_dir / f"assets\data\CoronaryTracing\CFA-PILOT_{id}_SERIES{series_id}\path_tracing\combined_paths\CFA-PILOT_{id}_SERIES{series_id}_combined_tree_spline.vtk"
         #image_path = working_dir / f'assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
         
