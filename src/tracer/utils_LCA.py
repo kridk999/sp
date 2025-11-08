@@ -410,10 +410,10 @@ if __name__ == "__main__":
 
 
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
-    compute_LV17 = False
+    compute_LV17 = True
     
     id = "0010"
-    series_id = "0036"
+    series_id = "0035"
     CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
     working_dir = Path.cwd()
     
@@ -422,16 +422,17 @@ if __name__ == "__main__":
     segmentation_path = working_dir / output_path / f'bartholinator/{CT_scan}_pred.nii.gz'
     image_path = working_dir / output_path / f'raw/{CT_scan}.nii.gz'
 
-    # if compute_LV17:
+    if compute_LV17:
 
-    #     wrap_lv_segments(
-    #             segmentation_path=segmentation_path, 
-    #             image_path=image_path, 
-    #             path=output_path
-    #         )
+        wrap_lv_segments(
+                segmentation_path=segmentation_path, 
+                image_path=image_path, 
+                path=output_path
+            )
 
-    # extractor = TracerPointExtractor()
-    # extractor.return_tracer_points_as_json(atlas_json_path=output_path / "misc" / "atlas.json", output_path=output_path  / "tracer_points.json")
+    extractor = TracerPointExtractor()
+    extractor.return_tracer_points_as_json(atlas_json_path=output_path / "misc" / "atlas.json", 
+                                           output_path=output_path  / "tracer_points.json")
 
 
     #vtk_to_numpy("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/combined_paths/CFA-PILOT_0010_SERIES0036_traced_path_1_combined_path.vtk")
@@ -448,10 +449,10 @@ if __name__ == "__main__":
     #     prefix="tracer_points"
     # )
 
-    # save_distances_to_json(
-    #     output_path / "tracer_points.json",
-    #     output_path / "tracer_points_with_distances.json"
-    # )
+    save_distances_to_json(
+        output_path / "tracer_points.json",
+        output_path / "tracer_points_with_distances.json"
+    )
     
     # vectors_to_root(type_points="atlas_points", load_path=output_path / "tracer_points.json")
     
@@ -471,7 +472,7 @@ if __name__ == "__main__":
     branch_points_idx = distance_between_point_and_set(start_point, point_set)
     
     v = tree_run_through_points(
-        tree_path=output_path / "path_tracing" / "combined_paths" / "CFA-PILOT_0010_SERIES0036_traced_path_3_combined_path.vtk",
+        tree_path=output_path / "path_tracing" / "combined_paths" / "CFA-PILOT_0010_SERIES0035_traced_path_3_combined_path.vtk",
         json_path=output_path / "tracer_points.json"
     )
     
