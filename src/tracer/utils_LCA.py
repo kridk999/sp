@@ -399,12 +399,12 @@ def tree_run_through_points(tree_path, json_path='output.json'):
         min_distances = np.minimum(min_distances, distances)
     
     min_distances < threshold
-    return min_distances
+    return min_distances, min_distances < threshold
 
 def distance_between_point_and_set(point, point_set):
     '''Calculate distances between a single point and a set of points.'''
     distances = np.linalg.norm(point_set - point, axis=1)
-    return np.argsort(distances)[1:][:2]
+    return np.argsort(distances)[1]
 
 if __name__ == "__main__":
 
@@ -427,7 +427,7 @@ if __name__ == "__main__":
     output_path = working_dir / f'assets/data/IMGCAS_tracing/576.img'
     segmentation_path = working_dir / output_path / f'bartholinator/576.img_pred.nii.gz'
     image_path = working_dir / output_path / f'raw/576.img.nii.gz'
-    tree_path=output_path / "path_tracing" / "combined_paths" / "576.img_traced_path_14_combined_path.vtk"
+    tree_path=output_path / "path_tracing" / "combined_paths" / "576.img_traced_path_1_combined_path.vtk"
     
     
     if compute_LV17:
@@ -479,20 +479,40 @@ if __name__ == "__main__":
         data = json.load(f)
 
     start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
-    point_set = [point[:3] for point in data["all_branch_points"]]
-
-
-    branch_points_idx = distance_between_point_and_set(start_point, point_set)
+    start_point_idx = min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])
     
-    v = tree_run_through_points(
+    point_set = [point[:3] for point in data["all_branch_points"]]
+    filtered_point_set = [point for i, point in enumerate(point_set) if i != start_point_idx]
+
+    #branch_points_idx = distance_between_point_and_set(start_point, point_set)
+    
+    v, v_bool = tree_run_through_points(
         tree_path=tree_path,
         json_path=output_path / "tracer_points.json"
     )
+    matched_indices = np.where(v_bool == True)
+    matched_point_set = [point_set[i] for i in matched_indices[0]]
+
+    print(matched_point_set)
+
+
+    branch_points_closest_to_root = distance_between_point_and_set(
+        start_point,
+        np.array(matched_point_set)
+    )
+
+
+
+    print(1)
+
+    #branch_point_runthrough = np.argsort(v)[2:][0]
     
-    branch_point_runthrough = np.argsort(v)[2:][0]
-    matched_value = np.intersect1d([branch_point_runthrough], branch_points_idx)
     
-    branch_match_point = point_set[matched_value[0]][:3] if len(matched_value) > 0 else None
+    
+    
+    # matched_value = np.intersect1d([branch_point_runthrough], branch_points_idx)
+
+    branch_match_point = point_set[matched_indices[0][branch_points_closest_to_root]]
 
     apex = np.array(data["atlas_points"][max(range(len(data["atlas_points"])), key=lambda i: data["atlas_points"][i][-1])][:3])
     vec_apex = vec_from_point_to_point(start_point, apex)
@@ -502,7 +522,7 @@ if __name__ == "__main__":
     cos_theta = a / (np.linalg.norm(vec_branch) * np.linalg.norm(vec_apex))
     angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
     angle_deg = np.degrees(angle_rad)
-    print("Cosine of angle between branch and apex vectors:", angle_deg)
+    print("Angle between branch and apex vectors:", angle_deg)
     
     
     # branch_point_1 = point_set[branch_points_idx[0]][:3]
