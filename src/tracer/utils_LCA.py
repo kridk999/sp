@@ -412,6 +412,8 @@ if __name__ == "__main__":
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
     compute_LV17 = False
     
+    print(1)
+    
     id = "0010"
     series_id = "0035"
     CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
