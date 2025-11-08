@@ -410,7 +410,9 @@ if __name__ == "__main__":
 
 
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
-    compute_LV17 = True
+    compute_LV17 = False
+    
+    print(2)
     
     id = "0010"
     series_id = "0035"
