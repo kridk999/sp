@@ -93,6 +93,8 @@ LCX_TERRITORY = {1,2,5,6,7,12}       # Anterolateral, Inferolateral
 LAD_END_SEGMENTS = {17, 13, 14} # Apex, Apical Anterior/Anteroseptal
 LCX_END_SEGMENTS = {11, 12, 16, 5} # Mid/Apical Lateral
 
+
+
 def classify_arteries(tree_data, end_segments_data):
     """
     Classifies coronary artery trees based on their path and termination segment.
@@ -126,9 +128,6 @@ def classify_arteries(tree_data, end_segments_data):
             'end_segment': end_segment
         }
 
-    # 3. Identify Main Trunks (LAD and LCX)
-    # Assume the main trunks are the longest and have the highest territory scores
-    
     # Find best candidate for LAD
     best_lad_candidate = max(
         artery_scores.keys(), 
