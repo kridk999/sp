@@ -7,10 +7,10 @@ import vtk
 from scipy.spatial import KDTree
 #from skimage.morphology import binary_dilation
 from scipy.ndimage import center_of_mass, binary_dilation
-from platipy.imaging.label.utils import get_com
-from platipy.imaging.utils.crop import crop_to_roi, label_to_roi
-from platipy.imaging.utils.geometry import vector_angle
-from platipy.imaging.utils.valve import generate_valve_using_cylinder
+# from platipy.imaging.label.utils import get_com
+# from platipy.imaging.utils.crop import crop_to_roi, label_to_roi
+# from platipy.imaging.utils.geometry import vector_angle
+# from platipy.imaging.utils.valve import generate_valve_using_cylinder
 from pathlib import Path
 
 from bullseye import create_single_bs_from_mesh
@@ -88,7 +88,7 @@ def extract_series_ids(folder, id):
 
 
 if __name__ == "__main__":
-    BULLSEYE = True
+    BULLSEYE = False
     LV17_WITH_LCA = True
     LCA_WITH_LV17 = True
     Verbose = True

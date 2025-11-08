@@ -19,7 +19,7 @@ def convert_txt_to_vtk(input_txt_path, output_vtk_path):
 
         # Write the points
         vtk_file.write(f"POINTS {len(lines)} float\n")
-        for line in lines:
+        for line in lines[2:]:
             x, y, z = map(float, line.split())
             vtk_file.write(f"{x} {y} {z}\n")
 
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     # )
 
     convert_txt_to_vtk(
-        "test123.txt",
+        "\\Users\\jacob\\OneDrive\\Uni\\9. Semester\\SpecialProjekt\\sp\\assets\\data\\0010\\processed\\misc\\atlas_points.txt",
         "test123.vtk"
     )   
     
