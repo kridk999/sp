@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # vtk DataFile Version 3.0
 Point data
 ASCII
@@ -49,3 +50,13 @@ POINTS 1 float
 VERTICES 1 2
 1 0
 >>>>>>> 1935a74ed1d93f93a3a0c7d4ae8b20040fb36b75
+=======
+# vtk DataFile Version 3.0
+Point data
+ASCII
+DATASET POLYDATA
+POINTS 1 float
+36.173828125 -139.673828125 95.44999694824219
+VERTICES 1 2
+1 0
+>>>>>>> bdeca6bdc0f438cb5549e980da71883db5d87ee0
