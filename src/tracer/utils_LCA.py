@@ -28,7 +28,6 @@ def convert_txt_to_vtk(input_txt_path, output_vtk_path):
         for i in range(len(lines)):
             vtk_file.write(f"1 {i}\n")
 
-
 class TracerPointExtractor:
     def __init__(self,
                  tracer_folder_path : str = "assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036"):
@@ -138,7 +137,6 @@ class TracerPointExtractor:
             json.dump(tracer_points, json_file, indent=4)
         return json.dumps(tracer_points, indent=4)
 
-
 def json_to_vtk_points(json_file_path, output_folder=".", prefix="points"):
     """
     Converts JSON coordinate data to VTK point files for visualization in Slicer.
@@ -195,8 +193,6 @@ def json_to_vtk_points(json_file_path, output_folder=".", prefix="points"):
     
     return created_files
 
-
-
 def compute_distances_from_root(data):
     """
     Computes the Euclidean distance from each point to the start_point (root).
@@ -227,7 +223,6 @@ def compute_distances_from_root(data):
     
     return result
 
-
 def save_distances_to_json(input_json_path, output_json_path):
     """
     Reads JSON, computes distances, and saves to a new JSON file.
@@ -243,12 +238,163 @@ def save_distances_to_json(input_json_path, output_json_path):
     print(f"Distances computed and saved to {output_json_path}")
     return result
 
+def vectors_to_root():
+    # Load the data
+    with open('output.json', 'r') as f:
+        data = json.load(f)
+
+    start_point = np.array(data['start_point'][0])
+    branch_points = np.array(data['all_branch_points'])
+
+    # Compute vectors from each branch point to root
+    vectors = start_point - branch_points
+
+    # Compute norms (magnitudes)
+    norms = np.linalg.norm(vectors, axis=1)
+
+    # Normalize vectors for direction
+    normalized_vectors = vectors / norms[:, np.newaxis]
+
+    # Create output for Slicer visualization
+    output = {
+        "start_point": data['start_point'][0],
+        "branch_points": data['all_branch_points'],
+        "vectors_to_root": vectors.tolist(),
+        "vector_norms": norms.tolist(),
+        "normalized_vectors": normalized_vectors.tolist()
+    }
+
+    # Save results
+    with open('vector_analysis.json', 'w') as f:
+        json.dump(output, f, indent=4)
+
+    # Print summary
+    for i, (bp, norm) in enumerate(zip(branch_points, norms)):
+        print(f"Branch point {i}: {bp} -> Distance to root: {norm:.2f}")
+
+def visualize_slicer_vecs():
+
+
+    with open('output_with_distances.json', 'r') as f:
+        data = json.load(f)
+
+
+
+    #start_point = np.array(data['start_point'][0])
+    start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
+    branch_points = np.array(data['all_branch_points'])[:, :3]
+
+    # Create Slicer markup JSON format
+    markup = {
+        "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.0.json#",
+        "markups": [{
+            "type": "Line",
+            "coordinateSystem": "LPS",
+            "controlPoints": []
+        }]
+    }
+
+    # Add line from each branch point to root
+    lines = []
+    for i, bp in enumerate(branch_points):
+        norm = np.linalg.norm(start_point - bp)
+        line = {
+            "type": "Line",
+            "coordinateSystem": "LPS",
+            "locked": False,
+            "controlPoints": [
+                {"position": bp.tolist()},
+                {"position": start_point.tolist()}
+            ]
+        }
+        lines.append(line)
+
+    markup["markups"] = lines
+
+    with open('branch_to_root_lines.mrk.json', 'w') as f:
+        json.dump(markup, f, indent=2)
+
+    print("Created branch_to_root_lines.mrk.json - load this in Slicer")
+
+def vtk_to_numpy(vtk_file_path):
+    """
+    Reads all points from a .vtk file and converts them into a NumPy array.
+
+    Args:
+        vtk_file_path (str): Path to the .vtk file.
+
+    Returns:
+        np.ndarray: A NumPy array containing the points.
+    """
+    with open(vtk_file_path, 'r') as vtk_file:
+        lines = vtk_file.readlines()
+
+    # Find the POINTS section
+    points_start = None
+    num_points = 0
+    for i, line in enumerate(lines):
+        if line.startswith("POINTS"):
+            points_start = i + 1
+            num_points = int(line.split()[1])  # Extract the number of points
+            break
+
+    if points_start is None:
+        raise ValueError("No POINTS section found in the .vtk file.")
+
+    # Extract the points - flatten all values first
+    flat_values = []
+    for line in lines[points_start:]:
+        if line.startswith("LINES"):  # Stop parsing when the LINES section starts
+            break
+        try:
+            flat_values.extend(list(map(float, line.split())))
+        except ValueError:
+            continue  # Skip lines that cannot be converted to floats
+
+    # Check if the number of values is divisible by 3
+    if len(flat_values) % 3 != 0:
+        raise ValueError(f"Number of values ({len(flat_values)}) is not divisible by 3.")
+
+    # Split into chunks of 3 (x, y, z coordinates)
+    points = [flat_values[i:i+3] for i in range(0, len(flat_values), 3)]
+
+    return np.array(points)
+
+def tree_run_through_points(vtk_file_path):
+    points = vtk_to_numpy(vtk_file_path)
+    threshold = 1.0
+    
+    with open('output.json', 'r') as f:
+        data = json.load(f)
+
+    start_point = np.array(data['start_point'][0])
+    all_branch_points = np.array(data['all_branch_points'])
+
+    combined_points = np.vstack([start_point, all_branch_points])
+
+    # Initialize with infinity for each combined point
+    min_distances = np.full(len(combined_points), np.inf)
+
+    for i, point in enumerate(points):
+        # Calculate distances from current point to all combined points
+        distances = np.linalg.norm(combined_points - point, axis=1)
+        # Update minimum distances
+        min_distances = np.minimum(min_distances, distances)
+    
+    min_distances < threshold
+    return min_distances
 
 if __name__ == "__main__":
 
-    # extractor = TracerPointExtractor()
-    # points = extractor.extract_tracer_points()
-    # extractor.return_tracer_points_as_json()
+    #vectors_to_root()
+    #visualize_slicer_vecs()
+
+    #vtk_to_numpy("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/combined_paths/CFA-PILOT_0010_SERIES0036_traced_path_1_combined_path.vtk")
+    tree_run_through_points("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/combined_paths/CFA-PILOT_0010_SERIES0036_traced_path_1_combined_path.vtk")
+
+        # extractor = TracerPointExtractor()
+        # points = extractor.extract_tracer_points()
+        # extractor.return_tracer_points_as_json()
     # print("Start Point:", points["start_point"])
     # print("End Points:", points["end_points"])
     # print("All Branch Points:", points["all_branch_points"])
