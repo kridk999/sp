@@ -166,12 +166,15 @@ def classify_arteries(tree_data, end_segments_data):
 
 
 if __name__ == "__main__":
-    id = '0010'
+    id = '576'
     series_id = '0020'
-    path = 'output.json'
-    path_atlas = f'assets/data/{id}/processed/misc/atlas.json'
-    path_trees = f'/Users/jacob/OneDrive/Uni/9. Semester/SpecialProjekt/sp/assets/data/CoronaryTracing/CFA-PILOT_{id}_SERIES{series_id}/path_tracing/combined_paths'
-    points = load_points_from_json(path)
+    Parent_dir = f'assets/data/IMGCAS_tracing/{id}.img'
+    point_path = Parent_dir + '/tracer_points.json'
+    path_atlas = Parent_dir + '/misc/atlas.json'
+    path_trees = Parent_dir + '/path_tracing/combined_paths'
+    # path_atlas = f'assets/data/{id}/processed/misc/atlas.json'
+    # path_trees = f'assets/data/CoronaryTracing/CFA-PILOT_{id}_SERIES{series_id}/path_tracing/combined_paths'
+    points = load_points_from_json(point_path)
     atlas = load_points_from_json(path_atlas)
     trees = load_vtk_trees_without_spline(path_trees)
 

@@ -21,7 +21,7 @@ def convert_txt_to_vtk(input_txt_path, output_vtk_path):
 
         # Write the points
         vtk_file.write(f"POINTS {len(lines)} float\n")
-        for line in lines[2:]:
+        for line in lines:
             x, y, z = map(float, line.split())
             vtk_file.write(f"{x} {y} {z}\n")
 
@@ -412,7 +412,7 @@ if __name__ == "__main__":
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
     compute_LV17 = False
     
-    print(2)
+    print(3)
     
     id = "0010"
     series_id = "0035"
