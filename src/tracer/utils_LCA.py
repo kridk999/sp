@@ -1,6 +1,7 @@
 from pathlib import Path
 import glob
 import json
+import re
 
 import numpy as np
 
@@ -379,7 +380,7 @@ def tree_run_through_points(tree_path, json_path='output.json'):
 
 
     points = vtk_to_numpy(tree_path)
-    threshold = 1.0
+    threshold = 1.5
     
 
 
@@ -404,161 +405,306 @@ def tree_run_through_points(tree_path, json_path='output.json'):
 def distance_between_point_and_set(point, point_set):
     '''Calculate distances between a single point and a set of points.'''
     distances = np.linalg.norm(point_set - point, axis=1)
-    return np.argsort(distances)[1]
+    try:
+        np.argsort(distances)[1]
+        return np.argsort(distances)[1]  # Return index of the closest point (excluding itself)
+    except IndexError:
+        return None
+
+def classify_trees_pipeline(
+        folder_path = 'assets/data/IMGCAS_tracing/182.img',
+        segmentation_path = 'assets/data/IMGCAS_tracing/182.img/bartholinator/182.img_pred.nii.gz',
+        image_path = 'assets/data/IMGCAS_tracing/182.img/raw/182.img.nii.gz',
+        run_17_LV_segments = True
+        ):
+
+        combined_paths_folder = Path(folder_path) / "path_tracing" / "combined_paths"
+
+        tree_paths = [p for p in combined_paths_folder.glob("*_traced_path_*.vtk")
+                if not p.name.endswith("spline.vtk")]
+
+        if run_17_LV_segments:
+            
+
+            wrap_lv_segments(
+                    segmentation_path=segmentation_path, 
+                    image_path=image_path, 
+                    path=folder_path
+                )
+
+            extractor = TracerPointExtractor(tracer_folder_path=folder_path)
+            extractor.return_tracer_points_as_json(atlas_json_path=folder_path / "misc" / "atlas.json", 
+                                                output_path=folder_path  / "tracer_points.json")
+
+            save_distances_to_json(
+                output_path / "tracer_points.json",
+                output_path / "tracer_points_with_distances.json"
+            )
+            json_to_vtk_points(
+            folder_path / "tracer_points.json",
+            output_folder=folder_path / "vtk_output",
+            prefix="tracer_points"
+            )
+
+
+        with open(output_path / "tracer_points_with_distances.json", 'r') as f:
+            data = json.load(f)
+
+        start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
+        start_point_idx = min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])
+        
+        point_set = [point[:3] for point in data["all_branch_points"]]
+        filtered_point_set = [point for i, point in enumerate(point_set) if i != start_point_idx]
+
+        #branch_points_idx = distance_between_point_and_set(start_point, point_set)
+        
+        tree_angles = {}
+
+        for idx, tree_path in enumerate(tree_paths):
+            print(f"Processing tree #{idx}: {tree_path}")
+            # existing code that follows in your placeholder will run inside this loop
+            match = re.search(r'traced_path_(\d+)_combined_path\.vtk', str(tree_path))
+            if match:
+                idx = int(match.group(1))
+            else:
+                idx = str(tree_path)
+            v, v_bool = tree_run_through_points(
+                tree_path=tree_path,
+                json_path=output_path / "tracer_points.json"
+            )
+
+
+
+            matched_indices = np.where(v_bool == True)
+            matched_point_set = [point_set[i] for i in matched_indices[0]]
+
+            print(matched_point_set)
+
+
+            branch_points_closest_to_root = distance_between_point_and_set(
+                start_point,
+                np.array(matched_point_set)
+            )
+
+
+            if branch_points_closest_to_root is None:
+                tree_angles[idx] = None
+                continue
+
+
+            #branch_point_runthrough = np.argsort(v)[2:][0]
+            
+            
+            
+            
+            # matched_value = np.intersect1d([branch_point_runthrough], branch_points_idx)
+
+            branch_match_point = point_set[matched_indices[0][branch_points_closest_to_root]]
+
+            apex = np.array(data["atlas_points"][max(range(len(data["atlas_points"])), key=lambda i: data["atlas_points"][i][-1])][:3])
+            vec_apex = vec_from_point_to_point(start_point, apex)
+            vec_branch = vec_from_point_to_point(start_point, branch_match_point)
+            
+            a = np.dot(vec_branch, vec_apex)
+            cos_theta = a / (np.linalg.norm(vec_branch) * np.linalg.norm(vec_apex))
+            angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+            angle_deg = np.degrees(angle_rad)
+
+            tree_angles[idx] = angle_deg
+
+            with open(folder_path / "tree_angles.json", 'w') as json_file:
+                json.dump(tree_angles, json_file, indent=4)
+
+        new_dict = label_tree_angles(folder_path)
+
+        return new_dict
+
+def label_tree_angles(output_path):
+    tree_angles = output_path / "tree_angles.json"
+
+    if tree_angles.exists():
+        with tree_angles.open('r') as f:
+            data = json.load(f)
+    else:
+        data = {}
+    new_dict = {}
+    new_dict["tree_angles"] = data
+    max_min_values = max(data.values()), min(data.values())
+    tree_labels = {
+            key: "LCX" if angle == max_min_values[0] else "LCA" if angle == max_min_values[1] else "intermediate_value"
+            for key, angle in data.items()
+        }
+    new_dict["tree_labels"] = tree_labels
+    with tree_angles.open('w') as f:
+        json.dump(new_dict, f, indent=4)
+
+    return new_dict
 
 if __name__ == "__main__":
 
-
+    id_list = ["130", "182", "281", "410", "519", "576", "654", "724", "802", "879"]
+    
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
     compute_LV17 = False
-    
-    print(3)
-    
-    id = "0010"
-    series_id = "0035"
-    CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
-    working_dir = Path.cwd()
-    
-    # # Construct the paths dynamically using pathlib
-    # output_path = working_dir / f'assets/data/CoronaryTracing/{CT_scan}'
-    # segmentation_path = working_dir / output_path / f'bartholinator/{CT_scan}_pred.nii.gz'
-    # image_path = working_dir / output_path / f'raw/{CT_scan}.nii.gz'
 
-    output_path = working_dir / f'assets/data/IMGCAS_tracing/576.img'
-    segmentation_path = working_dir / output_path / f'bartholinator/576.img_pred.nii.gz'
-    image_path = working_dir / output_path / f'raw/576.img.nii.gz'
-    tree_path=output_path / "path_tracing" / "combined_paths" / "576.img_traced_path_1_combined_path.vtk"
-    
-    
-    if compute_LV17:
 
-        wrap_lv_segments(
-                segmentation_path=segmentation_path, 
-                image_path=image_path, 
-                path=output_path
+    for id in id_list:
+        series_id = "0035"
+        CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
+        working_dir = Path.cwd()
+        
+        # # Construct the paths dynamically using pathlib
+        # output_path = working_dir / f'assets/data/CoronaryTracing/{CT_scan}'
+        # segmentation_path = working_dir / output_path / f'bartholinator/{CT_scan}_pred.nii.gz'
+        # image_path = working_dir / output_path / f'raw/{CT_scan}.nii.gz'
+
+        output_path = working_dir / f'assets/data/IMGCAS_tracing/{id}.img'
+        segmentation_path = working_dir / output_path / f'bartholinator/{id}.img_pred.nii.gz'
+        image_path = working_dir / output_path / f'raw/{id}.img.nii.gz'
+        tree_path=output_path / "path_tracing" / "combined_paths" / f"{id}.img_traced_path_5_combined_path.vtk"
+        
+        # output_path = working_dir / f'assets/data/0002'
+        # segmentation_path = working_dir / output_path / f'bartholinator/CFA-PILOT_0002_SERIES0047_pred.nii.gz'
+        # image_path = working_dir / output_path / f'raw/CFA-PILOT_0002_SERIES0047.nii.gz'
+
+        classify_trees_pipeline(
+            folder_path=output_path,
+            segmentation_path=segmentation_path,
+            image_path=image_path,
+            run_17_LV_segments=compute_LV17
             )
 
-    extractor = TracerPointExtractor(tracer_folder_path=output_path)
-    extractor.return_tracer_points_as_json(atlas_json_path=output_path / "misc" / "atlas.json", 
-                                           output_path=output_path  / "tracer_points.json")
 
 
-    #vtk_to_numpy("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/combined_paths/CFA-PILOT_0010_SERIES0036_traced_path_1_combined_path.vtk")
+    # if compute_LV17:
+
+    #     wrap_lv_segments(
+    #             segmentation_path=segmentation_path, 
+    #             image_path=image_path, 
+    #             path=output_path
+    #         )
+
+    # extractor = TracerPointExtractor(tracer_folder_path=output_path)
+    # extractor.return_tracer_points_as_json(atlas_json_path=output_path / "misc" / "atlas.json", 
+    #                                        output_path=output_path  / "tracer_points.json")
+
+
+    # #vtk_to_numpy("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/combined_paths/CFA-PILOT_0010_SERIES0036_traced_path_1_combined_path.vtk")
     
         
-    # print("Start Point:", points["start_point"])
-    # print("End Points:", points["end_points"])
-    # print("All Branch Points:", points["all_branch_points"])
+    # # print("Start Point:", points["start_point"])
+    # # print("End Points:", points["end_points"])
+    # # print("All Branch Points:", points["all_branch_points"])
 
 
+    # # json_to_vtk_points(
+    # #     "output.json",
+    # #     output_folder="vtk_output",
+    # #     prefix="tracer_points"
+    # # )
+
+    # save_distances_to_json(
+    #     output_path / "tracer_points.json",
+    #     output_path / "tracer_points_with_distances.json"
+    # )
     # json_to_vtk_points(
-    #     "output.json",
-    #     output_folder="vtk_output",
-    #     prefix="tracer_points"
+    # output_path / "tracer_points.json",
+    # output_folder=output_path / "vtk_output",
+    # prefix="tracer_points"
+    # )
+    
+    # # vectors_to_root(type_points="atlas_points", load_path=output_path / "tracer_points.json")
+    
+    # # visualize_slicer_vecs(
+    # #                     load_path=output_path / "tracer_points_with_distances.json",
+    # #                     output_path=output_path / "branch_to_root_lines.mrk.json",
+    # #                     type_points="atlas_points"
+    # # )
+
+    # with open(output_path / "tracer_points_with_distances.json", 'r') as f:
+    #     data = json.load(f)
+
+    # start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
+    # start_point_idx = min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])
+    
+    # point_set = [point[:3] for point in data["all_branch_points"]]
+    # filtered_point_set = [point for i, point in enumerate(point_set) if i != start_point_idx]
+
+    # #branch_points_idx = distance_between_point_and_set(start_point, point_set)
+    
+    # v, v_bool = tree_run_through_points(
+    #     tree_path=tree_path,
+    #     json_path=output_path / "tracer_points.json"
+    # )
+    # matched_indices = np.where(v_bool == True)
+    # matched_point_set = [point_set[i] for i in matched_indices[0]]
+
+    # print(matched_point_set)
+
+
+    # branch_points_closest_to_root = distance_between_point_and_set(
+    #     start_point,
+    #     np.array(matched_point_set)
     # )
 
-    save_distances_to_json(
-        output_path / "tracer_points.json",
-        output_path / "tracer_points_with_distances.json"
-    )
-    json_to_vtk_points(
-    output_path / "tracer_points.json",
-    output_folder="vtk_output",
-    prefix="tracer_points"
-    )
-    
-    # vectors_to_root(type_points="atlas_points", load_path=output_path / "tracer_points.json")
-    
-    # visualize_slicer_vecs(
-    #                     load_path=output_path / "tracer_points_with_distances.json",
-    #                     output_path=output_path / "branch_to_root_lines.mrk.json",
-    #                     type_points="atlas_points"
-    # )
-
-    with open(output_path / "tracer_points_with_distances.json", 'r') as f:
-        data = json.load(f)
-
-    start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
-    start_point_idx = min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])
-    
-    point_set = [point[:3] for point in data["all_branch_points"]]
-    filtered_point_set = [point for i, point in enumerate(point_set) if i != start_point_idx]
-
-    #branch_points_idx = distance_between_point_and_set(start_point, point_set)
-    
-    v, v_bool = tree_run_through_points(
-        tree_path=tree_path,
-        json_path=output_path / "tracer_points.json"
-    )
-    matched_indices = np.where(v_bool == True)
-    matched_point_set = [point_set[i] for i in matched_indices[0]]
-
-    print(matched_point_set)
 
 
-    branch_points_closest_to_root = distance_between_point_and_set(
-        start_point,
-        np.array(matched_point_set)
-    )
+    # print(1)
 
-
-
-    print(1)
-
-    #branch_point_runthrough = np.argsort(v)[2:][0]
+    # #branch_point_runthrough = np.argsort(v)[2:][0]
     
     
     
     
-    # matched_value = np.intersect1d([branch_point_runthrough], branch_points_idx)
+    # # matched_value = np.intersect1d([branch_point_runthrough], branch_points_idx)
 
-    branch_match_point = point_set[matched_indices[0][branch_points_closest_to_root]]
+    # branch_match_point = point_set[matched_indices[0][branch_points_closest_to_root]]
 
-    apex = np.array(data["atlas_points"][max(range(len(data["atlas_points"])), key=lambda i: data["atlas_points"][i][-1])][:3])
-    vec_apex = vec_from_point_to_point(start_point, apex)
-    vec_branch = vec_from_point_to_point(start_point, branch_match_point)
-    
-    a = np.dot(vec_branch, vec_apex)
-    cos_theta = a / (np.linalg.norm(vec_branch) * np.linalg.norm(vec_apex))
-    angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
-    angle_deg = np.degrees(angle_rad)
-    print("Angle between branch and apex vectors:", angle_deg)
-    
-    
-    # branch_point_1 = point_set[branch_points_idx[0]][:3]
-    # branch_point_2 = point_set[branch_points_idx[1]][:3]
     # apex = np.array(data["atlas_points"][max(range(len(data["atlas_points"])), key=lambda i: data["atlas_points"][i][-1])][:3])
+    # vec_apex = vec_from_point_to_point(start_point, apex)
+    # vec_branch = vec_from_point_to_point(start_point, branch_match_point)
     
-    # vec1 = vec_from_point_to_point(start_point, branch_point_1)
-    # vec2 = vec_from_point_to_point(start_point, branch_point_2)
-    # vec3 = vec_from_point_to_point(start_point, apex)
-
-    # a1 = np.dot(vec1, vec3) 
-    # a2 = np.dot(vec2, vec3)
+    # a = np.dot(vec_branch, vec_apex)
+    # cos_theta = a / (np.linalg.norm(vec_branch) * np.linalg.norm(vec_apex))
+    # angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+    # angle_deg = np.degrees(angle_rad)
+    # print("Angle between branch and apex vectors:", angle_deg)
     
-    # cos_theta1 = a1 / (np.linalg.norm(vec1) * np.linalg.norm(vec3))
-    # cos_theta2 = a2 / (np.linalg.norm(vec2) * np.linalg.norm(vec3))
+    
+    # # branch_point_1 = point_set[branch_points_idx[0]][:3]
+    # # branch_point_2 = point_set[branch_points_idx[1]][:3]
+    # # apex = np.array(data["atlas_points"][max(range(len(data["atlas_points"])), key=lambda i: data["atlas_points"][i][-1])][:3])
+    
+    # # vec1 = vec_from_point_to_point(start_point, branch_point_1)
+    # # vec2 = vec_from_point_to_point(start_point, branch_point_2)
+    # # vec3 = vec_from_point_to_point(start_point, apex)
 
-    # # Calculate the actual angles in radians
-    # angle1_rad = np.arccos(np.clip(cos_theta1, -1.0, 1.0))
-    # angle2_rad = np.arccos(np.clip(cos_theta2, -1.0, 1.0))
+    # # a1 = np.dot(vec1, vec3) 
+    # # a2 = np.dot(vec2, vec3)
+    
+    # # cos_theta1 = a1 / (np.linalg.norm(vec1) * np.linalg.norm(vec3))
+    # # cos_theta2 = a2 / (np.linalg.norm(vec2) * np.linalg.norm(vec3))
 
-    # # Convert to degrees for easier interpretation
-    # angle1_deg = np.degrees(angle1_rad)
-    # angle2_deg = np.degrees(angle2_rad)
+    # # # Calculate the actual angles in radians
+    # # angle1_rad = np.arccos(np.clip(cos_theta1, -1.0, 1.0))
+    # # angle2_rad = np.arccos(np.clip(cos_theta2, -1.0, 1.0))
 
-    # print("Cosine of angle between vec1 and vec3:", cos_theta1)
-    # print("Angle between vec1 and vec3:", angle1_deg, "degrees")
-    # print("Cosine of angle between vec2 and vec3:", cos_theta2)
-    # print("Angle between vec2 and vec3:", angle2_deg, "degrees")
+    # # # Convert to degrees for easier interpretation
+    # # angle1_deg = np.degrees(angle1_rad)
+    # # angle2_deg = np.degrees(angle2_rad)
+
+    # # print("Cosine of angle between vec1 and vec3:", cos_theta1)
+    # # print("Angle between vec1 and vec3:", angle1_deg, "degrees")
+    # # print("Cosine of angle between vec2 and vec3:", cos_theta2)
+    # # print("Angle between vec2 and vec3:", angle2_deg, "degrees")
     
 
 
 
 
-    # convert_txt_to_vtk(
-    #     "test123.txt",
-    #     "test123.vtk"
-    # )   
+    # # convert_txt_to_vtk(
+    # #     "test123.txt",
+    # #     "test123.vtk"
+    # # )   
     
-    #get_last_point_from_vtk("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/tracing_with_momentum_individual_paths/CFA-PILOT_0010_SERIES0036_traced_path_2.vtk")
+    # #get_last_point_from_vtk("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/tracing_with_momentum_individual_paths/CFA-PILOT_0010_SERIES0036_traced_path_2.vtk")
