@@ -288,7 +288,8 @@ def vec_from_point_to_point(point_a, point_b):
 
 def visualize_slicer_vecs(load_path='output_with_distances.json', 
                           output_path='branch_to_root_lines.mrk.json',
-                          type_points='all_branch_points'):
+                          type_points='all_branch_points',
+                          vtk_load_path=None):
 
     with open(load_path, 'r') as f:
         data = json.load(f)
@@ -297,7 +298,7 @@ def visualize_slicer_vecs(load_path='output_with_distances.json',
 
     #start_point = np.array(data['start_point'][0])
     start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
-    branch_points = np.array(data[type_points])[:, :3]
+    branch_points = vtk_to_numpy(vtk_load_path)
 
     # Create Slicer markup JSON format
     markup = {
@@ -374,6 +375,34 @@ def vtk_to_numpy(vtk_file_path):
     points = [flat_values[i:i+3] for i in range(0, len(flat_values), 3)]
 
     return np.array(points)
+
+def numpy_to_vtk(points_array, output_vtk_path):
+    """
+    Writes a NumPy array of points to a .vtk file.
+
+    Args:
+        points_array (np.ndarray): A NumPy array of shape (N, 3) containing the points.
+        output_vtk_path (str): Path to the output .vtk file.
+    """
+    with open(output_vtk_path, 'w') as vtk_file:
+        # Write VTK header
+        vtk_file.write("# vtk DataFile Version 3.0\n")
+        vtk_file.write("Point data\n")
+        vtk_file.write("ASCII\n")
+        vtk_file.write("DATASET POLYDATA\n")
+
+        # Write points
+        num_points = points_array.shape[0]
+        vtk_file.write(f"POINTS {num_points} float\n")
+        for point in points_array:
+            vtk_file.write(f"{point[0]} {point[1]} {point[2]}\n")
+
+        # Write vertices (for visualization as points)
+        vtk_file.write(f"\nVERTICES {num_points} {num_points * 2}\n")
+        for i in range(num_points):
+            vtk_file.write(f"1 {i}\n")
+
+    print(f"Created: {output_vtk_path}")
 
 def tree_run_through_points(tree_path, json_path='output.json'):
     
@@ -540,14 +569,83 @@ def label_tree_angles(output_path):
 
     return new_dict
 
+def branch_point_detector(folder_path, threshold=0.2):
+    combined_tree_files = list(folder_path.glob("path_tracing/combined_paths/*_combined_tree_spline.vtk"))
+    spline_trees = list(folder_path.glob("path_tracing/combined_paths/*_combined_path_spline.vtk"))
+
+    
+    
+    tree_paths = []
+    
+    combined_tree_files = vtk_to_numpy(combined_tree_files[0])
+    tree_paths.append(combined_tree_files)
+    
+    for spline_tree in spline_trees:
+        spline_tree_numpy = vtk_to_numpy(spline_tree)
+        tree_paths.append(spline_tree_numpy)
+    
+    traced_paths = tree_paths[1:]
+    # remove first 10 points from each traced path
+    prune_n = 10
+    traced_paths = [path[prune_n:] if len(path) > prune_n else path[:0] for path in traced_paths]
+    
+    
+    if not traced_paths:
+        return []
+
+
+    num_trees = len(traced_paths)
+    # Find the length of the longest path to define the number of comparisons
+    max_len = max(len(path) for path in traced_paths)
+
+    comparison_matrix = []
+
+    # Iterate through each point index up to the max length
+    for i in range(max_len):
+        point_index_comparisons = []
+        
+        # Iterate through each "source" tree (T_j)
+        for j in range(num_trees):
+            # Check if the source tree has a point at this index
+            if i >= len(traced_paths[j]):
+                # If not, there's nothing to compare from, so add an empty tuple
+                point_index_comparisons.append(tuple())
+                continue
+
+            source_point = traced_paths[j][i]
+            comparison_results = []
+
+            # Compare the source point with the point at the same index in all "target" trees (T_k)
+            for k in range(num_trees):
+                # Check if the target tree has a point at this index
+                if i >= len(traced_paths[k]):
+                    # If not, the comparison is not possible
+                    comparison_results.append(False)
+                    continue
+                
+                target_point = traced_paths[k][i]
+                
+                # Calculate Euclidean distance and check against the threshold
+                distance = np.linalg.norm(source_point - target_point)
+                is_within_threshold = distance < threshold
+                comparison_results.append(is_within_threshold)
+            
+            point_index_comparisons.append(tuple(comparison_results))
+        
+        comparison_matrix.append(point_index_comparisons)
+
+    return comparison_matrix
+
+
+
 if __name__ == "__main__":
 
-    id_list = ["130", "182", "281", "410", "519", "576", "654", "724", "802", "879"]
+    #id_list = ["130", "182", "281", "410", "519", "576", "654", "724", "802", "879"]
     
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
     compute_LV17 = False
 
-
+    id_list = ["410"]
     for id in id_list:
         series_id = "0035"
         CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
@@ -567,12 +665,16 @@ if __name__ == "__main__":
         # segmentation_path = working_dir / output_path / f'bartholinator/CFA-PILOT_0002_SERIES0047_pred.nii.gz'
         # image_path = working_dir / output_path / f'raw/CFA-PILOT_0002_SERIES0047.nii.gz'
 
-        classify_trees_pipeline(
-            folder_path=output_path,
-            segmentation_path=segmentation_path,
-            image_path=image_path,
-            run_17_LV_segments=compute_LV17
-            )
+
+
+        # classify_trees_pipeline(
+        #     folder_path=output_path,
+        #     segmentation_path=segmentation_path,
+        #     image_path=image_path,
+        #     run_17_LV_segments=compute_LV17
+        #     )
+
+        branch_point_detector(output_path, threshold=0.5)
 
 
 
@@ -702,9 +804,9 @@ if __name__ == "__main__":
 
 
 
-    # # convert_txt_to_vtk(
-    # #     "test123.txt",
-    # #     "test123.vtk"
-    # # )   
+    convert_txt_to_vtk(
+        "test123.txt",
+        "test123.vtk"
+    )   
     
     # #get_last_point_from_vtk("F:/samT7/sp/assets/data/CoronaryTracing/CFA-PILOT_0010_SERIES0036/path_tracing/tracing_with_momentum_individual_paths/CFA-PILOT_0010_SERIES0036_traced_path_2.vtk")
