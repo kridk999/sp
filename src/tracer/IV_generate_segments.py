@@ -986,18 +986,17 @@ def wrap_lv_all(split, current_save_dir, exists_ok=True):
 
 
 if __name__ == "__main__":
-
     id = "0010"
     series_id = "0036"
     CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}.nii.gz"
     working_dir = Path.cwd()
-    
-    
 
     # Construct the paths dynamically using pathlib
     output_path = working_dir / f'assets/data/CoronaryTracing/{CT_scan}'
     segmentation_path = working_dir / output_path / f'bartholinator/CFA-PILOT_{id}_SERIES{series_id}_pred.nii.gz'
     image_path = working_dir / output_path / f'raw/CFA-PILOT_{id}_SERIES{series_id}.nii.gz'
+
+
 
     # output_path = f'F:/sp/assets/data/{id}/processed'
     # segmentation_path = f'F:/sp/assets/data/{id}/raw/CFA-PILOT_{id}_SERIES{series_id}_labels.nii.gz'
