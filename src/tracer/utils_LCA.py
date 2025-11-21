@@ -46,9 +46,7 @@ class TracerPointExtractor:
         self.end_points = self._get_end_point_from_vtk()
 
 
-        self.start_point = self._parse_xyz_coordinates(
-                    self._get_start_point_from_vtk()
-        )
+        self.start_point = self._get_start_point_from_vtk()
 
         self.all_bp = self._get_all_bp_points()
 
@@ -100,11 +98,10 @@ class TracerPointExtractor:
         return last_points
 
     def _get_start_point_from_vtk(self):
-        start_point_files = glob.glob(str(self.individual_paths_folder / "*start_point.txt"))
+        tree = glob.glob(str(self.combined_paths_folder / "*img_traced_path_1_combined_path_spline.vtk*"))
+        tree_numpy = vtk_to_numpy(tree[0])
 
-
-        with open(start_point_files[0], 'r') as vtk_file:
-            return vtk_file.read().strip()  # Read and store the content
+        return [tree_numpy[0].tolist()]
 
     def _get_all_bp_points(self, distance_threshold=0.4, prune_end_n=0):
         # bp_point_files = glob.glob(str(self.individual_paths_folder / "*all_bp.txt"))
@@ -493,6 +490,7 @@ def classify_trees_pipeline(
             data = json.load(f)
 
         start_point = np.array(data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][:3])
+        start_point_distance = data["all_branch_points"][min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])][-1]
         start_point_idx = min(range(len(data["all_branch_points"])), key=lambda i: data["all_branch_points"][i][-1])
 
         point_set = [point[:3] for point in data["all_branch_points"]]
@@ -501,7 +499,7 @@ def classify_trees_pipeline(
         #branch_points_idx = distance_between_point_and_set(start_point, point_set)
 
         tree_angles = {}
-
+        
         for idx, tree_path in enumerate(tree_paths):
             print(f"Processing tree #{idx}: {tree_path}")
             # existing code that follows in your placeholder will run inside this loop
@@ -545,9 +543,14 @@ def classify_trees_pipeline(
             branch_match_point = tree[point_clostest_to_start+5]
             #branch_match_point = point_set[matched_indices[0][branch_points_closest_to_root]]
 
-            apex = data["start_point"][0][:3]
+            reference_point = data["start_point"][0][:3]
+            if start_point_distance <= 0.5:
+                reference_point = get_label_centroids(segmentation_path, label_value=6)[1]
+
+            #apex = get_label_centroids(segmentation_path, label_value=6)[1]#data["start_point"][0][:3]
+            #np.array(centroids_of_label_components(segmentation_path, label=6, top_n=2, save_vtk=segmentation_path)[0]["centroid_lps_mm"])
             #np.array(data["atlas_points"][max(range(len(data["atlas_points"])), key=lambda i: data["atlas_points"][i][-1])][:3])
-            vec_apex = vec_from_point_to_point(start_point, apex)
+            vec_apex = vec_from_point_to_point(start_point, reference_point)
             vec_branch = vec_from_point_to_point(start_point, branch_match_point)
 
             # a = np.dot(vec_branch, vec_apex)
@@ -555,9 +558,11 @@ def classify_trees_pipeline(
             # angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
             # angle_deg = np.degrees(angle_rad)
             cross = np.cross(vec_apex, vec_branch)
+            magnitude = np.linalg.norm(cross)
 
+            normalized_cross = cross / magnitude if magnitude != 0 else cross
 
-            tree_angles[idx] = cross[2]
+            tree_angles[idx] = normalized_cross[2]
 
             with open(folder_path / "tree_angles.json", 'w') as json_file:
                 json.dump(tree_angles, json_file, indent=4)
@@ -1140,14 +1145,130 @@ def visualize_vectors_angle(origin, vec1, vec2, output_path='vector_visualizatio
     
     return angle_deg, output_path
 
+def visualize_vector_in_slicer(start_point, vector, output_path='vector_visualization.mrk.json'):
+    """
+    Visualizes a vector in 3D Slicer by creating a markup JSON file.
+
+    Args:
+        start_point (list or np.ndarray): The starting point of the vector [x, y, z].
+        vector (list or np.ndarray): The vector direction and magnitude [x, y, z].
+        output_path (str): Path to save the Slicer-compatible JSON file.
+
+    Returns:
+        str: Path to the created JSON file.
+    """
+    import numpy as np
+    import json
+
+    # Ensure inputs are numpy arrays
+    start_point = np.array(start_point)
+    vector = np.array(vector)
+
+    # Calculate the end point of the vector
+    end_point = start_point + vector
+
+    # Create Slicer markup JSON
+    markup = {
+        "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.0.json#",
+        "markups": [
+            {
+                "type": "Line",
+                "coordinateSystem": "LPS",
+                "locked": False,
+                "label": f"Vector (length: {np.linalg.norm(vector):.2f})",
+                "controlPoints": [
+                    {"position": start_point.tolist()},
+                    {"position": end_point.tolist()}
+                ]
+            },
+            {
+                "type": "Fiducial",
+                "coordinateSystem": "LPS",
+                "locked": False,
+                "label": "Start Point",
+                "controlPoints": [
+                    {"position": start_point.tolist()}
+                ]
+            },
+            {
+                "type": "Fiducial",
+                "coordinateSystem": "LPS",
+                "locked": False,
+                "label": "End Point",
+                "controlPoints": [
+                    {"position": end_point.tolist()}
+                ]
+            }
+        ]
+    }
+
+    # Save the JSON file
+    with open(output_path, 'w') as f:
+        json.dump(markup, f, indent=2)
+
+    print(f"Vector visualization saved to: {output_path}")
+    print("Load this file in 3D Slicer to visualize the vector.")
+    return output_path
+
+def get_label_centroids(nii_path, label_value=6):
+    """
+    Finds the center of mass for clusters of a specific label in a NIfTI file.
+    Returns the centroids of the two largest clusters as numpy arrays in physical coordinates.
+    """
+    import SimpleITK as sitk
+    from scipy import ndimage
+    import numpy as np
+
+    # Load the NIfTI file using SimpleITK
+    # This handles cases where .nii.gz might actually be uncompressed .nii
+    nii = sitk.ReadImage(nii_path)
+    
+    # Get array data (SimpleITK returns array in [z, y, x] order)
+    data = sitk.GetArrayFromImage(nii)
+
+    # Create a binary mask for the label
+    mask = data == label_value
+
+    # Find connected components (clusters)
+    labeled_array, num_features = ndimage.label(mask)
+
+    if num_features == 0:
+        print(f"No voxels found for label {label_value}")
+        return []
+
+    # Calculate size of each component
+    component_sizes = []
+    for i in range(1, num_features + 1):
+        size = (labeled_array == i).sum()
+        component_sizes.append((i, size))
+
+    # Sort by size (largest first) and take top 2
+    component_sizes.sort(key=lambda x: x[1], reverse=True)
+    top_clusters = component_sizes[:2]
+
+    centroids = []
+    for cluster_idx, size in top_clusters:
+        # Calculate center of mass in voxel coordinates (z, y, x)
+        voxel_center = ndimage.center_of_mass(mask, labeled_array, cluster_idx)
+        
+        # Convert to physical coordinates
+        # ndimage returns (z, y, x), but SITK expects (x, y, z) for TransformContinuousIndexToPhysicalPoint
+        physical_center = nii.TransformContinuousIndexToPhysicalPoint(voxel_center[::-1])
+        centroids.append(np.array(physical_center))
+
+    return centroids
+
+
 if __name__ == "__main__":
 
-    #id_list = ["130", "182", "281", "410", "519", "576", "654", "724", "802", "879"]
-    #id_list = ["39", "119", "123", "124"]
-    #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
-    compute_LV17 = True
 
-    id_list = ["124"]
+
+    #id_list = ["130", "182", "281", "410", "519", "576", "654", "724", "802", "879"]
+    #id_list = ["145", "160", "179", "181", "213", "214", "224", "254", "260", "264", "268", "275", "284", "289"]
+    #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
+    compute_LV17 = False
+
+    id_list = ["39", "603", "770", "179"]
     for id in tqdm(id_list):
         # series_id = "0035"
         # CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
@@ -1166,6 +1287,8 @@ if __name__ == "__main__":
         output_path = working_dir / f'assets/imagecas/nii_images_sample_tracing/{id}.img'
         segmentation_path = working_dir / output_path / f'bartholinator/{id}.img_pred.nii.gz'
         image_path = working_dir / f'assets/imagecas/nii_images_sample/{id}.img.nii.gz'
+
+        get_label_centroids(segmentation_path, label_value=6)
 
         # output_path = working_dir / f'assets/data/0002'
         # segmentation_path = working_dir / output_path / f'bartholinator/CFA-PILOT_0002_SERIES0047_pred.nii.gz'
