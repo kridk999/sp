@@ -1143,11 +1143,12 @@ def visualize_vectors_angle(origin, vec1, vec2, output_path='vector_visualizatio
 if __name__ == "__main__":
 
     #id_list = ["130", "182", "281", "410", "519", "576", "654", "724", "802", "879"]
+    id_list = ["39","224","333","377","560","603","708","714","770","865"]
     #id_list = ["39", "119", "123", "124"]
     #com_points = load_atlas_json("assets/data/0010/processed/misc/atlas.json")
     compute_LV17 = True
 
-    id_list = ["124"]
+    #id_list = ["561"]
     for id in tqdm(id_list):
         # series_id = "0035"
         # CT_scan = f"CFA-PILOT_{id}_SERIES{series_id}"
